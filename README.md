@@ -56,3 +56,6 @@ disconnect the M5 side. The board resets when the port opens, so the tool waits 
 
 Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-120 (see the speed limit in design/wheel-pid-tuning.md). The robot stops by itself if no command
 arrives for 1 s, so resend commands to keep moving. Topics: `starrobox/robot/cmd`, `starrobox/robot/status`.
+
+## Planned: magnetic tracking, RFID seats, table-edge protection
+Design in `design/magnetic-rfid-cliff.md`, parts list and purchase links in `design/bom-nav-sensors.md` (not built yet).
