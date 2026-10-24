@@ -41,7 +41,7 @@ Nordic UART Service, so generic BLE terminal apps (nRF Toolbox, Serial Bluetooth
 Joystick angles follow the Nexus library: counter-clockwise from right, so 0 = right, 90 = forward, 180 = left, 270 = backward (from `setCarRight` / `setCarBackoff` in `Omni4WD.cpp`).
 
 ## Status
-The `ble` env compiles for the AtomS3 (M5Unified, `espressif32@6.4.0`). Not yet tested with a phone.
+The `ble` env runs on the AtomS3 (M5Unified, `espressif32@6.4.0`). Tested from a PC with Python `bleak`: the device advertises as `Starrobox`, `PING`/error commands work with or without a trailing newline, and 30 of 30 `PING`s were answered with 46-171 ms latency (median 94 ms). Not yet tested with a phone or with wheel motion over BLE.
 
 ## Open items
 - The platform is pinned to `espressif32@6.4.0` (Arduino-ESP32 2.x); the BLE API differs in 3.x.

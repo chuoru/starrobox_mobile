@@ -25,7 +25,7 @@ The modes are separate; reflash to switch. The board is the M5 AtomS3 (settings 
 `--upload-port COMxx` to pick the serial port.
 
 Wiring debug: `pio run -e mqtt-debug` also publishes every raw byte received from the RS485 bus to
-`starrobox/robot/status/rx`, and `nexus/rs485_probe` is a small Nexus sketch that sends `HELLO` once a second.
+`starrobox/robot/status/rx`, `pio run -e ble-debug` logs BLE writes, bus bytes and notifications on the M5's USB serial port, and `nexus/rs485_probe` is a small Nexus sketch that sends `HELLO` once a second.
 
 ## Phone (BLE mode)
 Host `phone/index.html` over HTTPS (Web Bluetooth needs it), open it in Chrome on Android (Bluefy on iOS),
@@ -51,6 +51,7 @@ disconnect the M5 side. The board resets when the port opens, so the tool waits 
 | `ROTL/ROTR <mm/s>` | rotate |
 | `STOP` | stop |
 | `PING` | reply `PONG` |
+| `TURN <ms>` | RS485 reply pause, 0-200 ms (default 30) |
 
 Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-600. The robot stops by itself if no command
 arrives for 1 s, so resend commands to keep moving. Topics: `starrobox/robot/cmd`, `starrobox/robot/status`.

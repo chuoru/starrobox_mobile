@@ -14,7 +14,7 @@
 
 #define BAUD            19200
 #define PIN_RS485_DIR   13      // HIGH = transmit, LOW = receive (same as the SONAR library)
-#define RS485_TURNAROUND_MS 5   // pause before replying so the M5's RS485 unit has switched to receive
+#define RS485_TURNAROUND_MS 30  // default pause before replying so the M5's RS485 base has switched to receive (TURN <ms> changes it)
 #define LINE_MAX        48
 #define FAILSAFE_MS     1000UL
 #define MAX_SPEED_MMPS  600
@@ -38,6 +38,7 @@ static uint8_t lineLen = 0;
 static bool overflow = false;
 static unsigned long lastCmdMs = 0;
 static bool moving = false;
+static unsigned int turnaroundMs = RS485_TURNAROUND_MS;
 #ifdef RS485_DEBUG
 static unsigned long dbgRxBytes = 0, dbgLines = 0, dbgLastMs = 0;
 #endif
@@ -56,7 +57,7 @@ void setup() {
 // Send one reply line: wait for the M5's auto-direction RS485 unit to release the bus,
 // drive the bus, wait until the last bit is out, release it.
 static void reply(const __FlashStringHelper* msg) {
-	delay(RS485_TURNAROUND_MS);
+	delay(turnaroundMs);
 	digitalWrite(PIN_RS485_DIR, HIGH);
 	Serial.println(msg);
 	Serial.flush();
@@ -83,6 +84,13 @@ static void handleLine(char* s) {
 	int speed = a1 ? clampSpeed(atol(a1)) : 0;
 
 	if (!strcmp(cmd, "PING")) { reply(F("PONG")); return; }
+	if (!strcmp(cmd, "TURN")) {          // TURN <ms>: reply pause, 0-200
+		if (!a1) { reply(F("ERR args")); return; }
+		long ms = atol(a1);
+		turnaroundMs = ms < 0 ? 0 : (ms > 200 ? 200 : (unsigned int)ms);
+		reply(F("OK"));
+		return;
+	}
 	if (!strcmp(cmd, "STOP")) { Omni.setCarStop(); moving = false; }
 	else if (!strcmp(cmd, "MOVE")) {
 		if (!a1 || !a2) { reply(F("ERR args")); return; }

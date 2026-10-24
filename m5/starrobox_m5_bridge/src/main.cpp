@@ -51,6 +51,9 @@ static void toNexus(const char* s, size_t len) {
 	nexusUart.write((const uint8_t*)s, len);
 	nexusUart.write('\n');
 	lastBusMs = millis();
+#ifdef DEBUG_BUS
+	Serial.printf("[%lu] TX [%.*s]\n", millis(), (int)len, s);
+#endif
 	showCmd(String(s).substring(0, len));
 }
 
@@ -133,6 +136,11 @@ class RxCb : public BLECharacteristicCallbacks {
 	void onWrite(BLECharacteristic* c) override {
 		const char* d = (const char*)c->getData();
 		size_t n = c->getLength();
+#ifdef DEBUG_BUS
+		Serial.printf("[%lu] BLE write %u bytes:", millis(), (unsigned)n);
+		for (size_t k = 0; k < n; k++) Serial.printf(" %02X", (uint8_t)d[k]);
+		Serial.println();
+#endif
 		size_t start = 0;
 		for (size_t i = 0; i <= n; i++) {
 			if (i == n || d[i] == '\n' || d[i] == '\r') {
@@ -176,6 +184,9 @@ static void linkLoop() {
 }
 
 static void toLink(const String& reply) {
+#ifdef DEBUG_BUS
+	Serial.printf("[%lu] NOTIFY [%s] connected=%d\n", millis(), reply.c_str(), (int)connected);
+#endif
 	if (!connected) return;
 	String out = reply + "\n";
 	txChar->setValue((uint8_t*)out.c_str(), out.length());
@@ -188,6 +199,10 @@ void setup() {
 	auto cfg = M5.config();
 	M5.begin(cfg);
 	M5.Display.setTextSize(1);
+#ifdef DEBUG_BUS
+	Serial.begin(115200);
+	delay(300);
+#endif
 #if defined(DEBUG_BUS) && defined(MODE_MQTT)
 	// Pin probe: send PING in each RX/TX order and look for PONG from the Nexus.
 	// Results are shown on the display; the order that answers (else the first) is used.
@@ -258,6 +273,9 @@ void loop() {
 	while (nexusUart.available()) {
 		char c = nexusUart.read();
 		debugBus((uint8_t)c);
+#ifdef DEBUG_BUS
+		Serial.printf("[%lu] RX %02X\n", millis(), (uint8_t)c);
+#endif
 		if (c == '\r') continue;
 		if (c == '\n') {
 			if (isNexusReply(rxLine)) toLink(rxLine);

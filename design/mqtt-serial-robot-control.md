@@ -22,7 +22,7 @@ PC (MQTT broker + test tool) --MQTT/WiFi--> M5 (bridge) --UART 19200 8N1--> Nexu
 | `README.md` | Wiring, build steps, protocol |
 
 ## Wiring
-AtomS3 RX G5 / TX G6 -> Atomic RS485 Base (auto-direction); base A -> shield A, base B -> shield B (swap them if nothing answers); common GND. The sketch drives pin 13 high only while it sends a reply, after a 5 ms turnaround pause: without it the reply arrives while the base is still switching to receive and is lost. The M5 forwards only `PONG`/`OK`/`ERR…` lines and waits 10 ms between writes to avoid collisions.
+AtomS3 RX G5 / TX G6 -> Atomic RS485 Base (auto-direction); base A -> shield A, base B -> shield B (swap them if nothing answers); common GND. The sketch drives pin 13 high only while it sends a reply, after a turnaround pause (default 30 ms, set with `TURN <ms>`): with 5 ms the base was still switching to receive, so replies lost their first bytes or came back garbled; at 30 ms 48 of 48 test replies were clean. The M5 forwards only `PONG`/`OK`/`ERR…` lines and waits 10 ms between writes to avoid collisions.
 
 ## Protocol
 One ASCII line per command, `\n` terminated, identical over MQTT and serial.
@@ -34,6 +34,7 @@ One ASCII line per command, `\n` terminated, identical over MQTT and serial.
 | `ROTL/ROTR <mm/s>` | rotate |
 | `STOP` | stop |
 | `PING` | reply `PONG` |
+| `TURN <ms>` | RS485 reply pause, 0-200 (default 30) |
 
 Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-600 mm/s. The robot stops if no command arrives for 1 s.
 
