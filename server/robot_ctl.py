@@ -54,10 +54,10 @@ def manual(send, speed):
                 elif ch == " ":
                     cmd, until = None, 0.0
                 elif ch in "+=":
-                    speed = min(speed + 25, 600)
+                    speed = min(speed + 10, 120)
                     print(f"\rspeed {speed}   ", end="")
                 elif ch == "-":
-                    speed = max(speed - 25, 25)
+                    speed = max(speed - 10, 10)
                     print(f"\rspeed {speed}   ", end="")
             if cmd and now < until:
                 if now - last_sent >= RESEND_S:
@@ -107,13 +107,13 @@ def main():
     s.add_argument("command")
     sub.add_parser("monitor")
     k = sub.add_parser("keys")
-    k.add_argument("--speed", type=int, default=150)
+    k.add_argument("--speed", type=int, default=80)
     m = sub.add_parser("manual")
-    m.add_argument("--speed", type=int, default=150)
+    m.add_argument("--speed", type=int, default=80)
     d = sub.add_parser("direct")
     d.add_argument("com", help="serial port of the Nexus USB link, e.g. COM5")
     d.add_argument("--baud", type=int, default=19200)
-    d.add_argument("--speed", type=int, default=150)
+    d.add_argument("--speed", type=int, default=80)
     a = p.parse_args()
 
     if a.mode == "direct":

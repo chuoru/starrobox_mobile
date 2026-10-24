@@ -36,7 +36,7 @@ One ASCII line per command, `\n` terminated, identical over MQTT and serial.
 | `PING` | reply `PONG` |
 | `TURN <ms>` | RS485 reply pause, 0-200 (default 30) |
 
-Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-600 mm/s. The robot stops if no command arrives for 1 s.
+Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-120 mm/s (library units; see [wheel-pid-tuning.md](wheel-pid-tuning.md)). The robot stops if no command arrives for 1 s.
 
 MQTT topics: `starrobox/robot/cmd` (PC -> M5) and `starrobox/robot/status` (M5 -> PC, includes online/offline).
 

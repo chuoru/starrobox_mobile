@@ -9,15 +9,20 @@
 #include <EEPROM.h>
 #include <fuzzy_table.h>
 #include <PID_Beta6.h>
+#define private public      // reach Motor::speed2DutyCycle, see stopWheels()
 #include <MotorWheel.h>
 #include <Omni4WD.h>
+#undef private
 
 #define BAUD            19200
 #define PIN_RS485_DIR   13      // HIGH = transmit, LOW = receive (same as the SONAR library)
 #define RS485_TURNAROUND_MS 30  // default pause before replying so the M5's RS485 base has switched to receive (TURN <ms> changes it)
 #define LINE_MAX        48
 #define FAILSAFE_MS     1000UL
-#define MAX_SPEED_MMPS  600
+#define MAX_SPEED_MMPS  120     // wheel speed limit in library mm/s: above ~135 the slowest wheel is at full PWM
+                                // (measured 1640 RPM), the PID loses control and the wheels drift apart
+#define ROT_FACTOR      1.42    // rotating moves each wheel 1.42x the requested speed
+#define STALL_US        60000UL // no encoder pulse for this long means the wheel is stopped
 
 irqISR(irq1,isr1);
 MotorWheel wheel1(3,2,4,5,&irq1);
@@ -38,6 +43,8 @@ static uint8_t lineLen = 0;
 static bool overflow = false;
 static unsigned long lastCmdMs = 0;
 static bool moving = false;
+static bool halted = false;
+static MotorWheel* const wheels[4] = {&wheel1,&wheel2,&wheel3,&wheel4};
 static unsigned int turnaroundMs = RS485_TURNAROUND_MS;
 #ifdef RS485_DEBUG
 static unsigned long dbgRxBytes = 0, dbgLines = 0, dbgLastMs = 0;
@@ -70,6 +77,53 @@ static int clampSpeed(long v) {
 	return (int)v;
 }
 
+// Wheel speeds in the Omni4WD formulas, as multiples of the requested speed / omega, must stay
+// under MAX_SPEED_MMPS so every wheel can still reach its setpoint.
+static float limitScale(float speed, float rad, float omega) {
+	float m = fabs(speed) * (fabs(sin(rad)) + fabs(cos(rad))) + fabs(omega) * WHEELSPAN;
+	return m > MAX_SPEED_MMPS ? MAX_SPEED_MMPS / m : 1.0;
+}
+
+// Stop all wheels and hold them at PWM 0. Without this the PID, still seeing the old speed,
+// winds its accumulator negative and drives the wheels backwards.
+static void stopWheels() {
+	Omni.setCarStop();
+	for (uint8_t i = 0; i < 4; i++) {
+		wheels[i]->speed2DutyCycle = 0;
+		wheels[i]->runPWM(0, DIR_ADVANCE);
+	}
+	halted = true;
+	moving = false;
+}
+
+static void startWheels() {
+	if (!halted) return;
+	halted = false;
+	for (uint8_t i = 0; i < 4; i++) wheels[i]->speed2DutyCycle = 0;
+}
+
+// Regulate every wheel on its own (Omni4WD::PIDRegulate() skips the later wheels whenever an earlier
+// one is not due), never reverse a wheel, and report a wheel without encoder pulses as stopped.
+static void regulate() {
+	if (halted) return;
+	for (uint8_t i = 0; i < 4; i++) {
+		noInterrupts();
+		unsigned long last = wheels[i]->isr->pulseEndMicros;
+		interrupts();
+		if (micros() - last > STALL_US) wheels[i]->isr->speedPPS = 0;
+		wheels[i]->PIDRegulate();
+		if (wheels[i]->speed2DutyCycle < 0) {
+			wheels[i]->speed2DutyCycle = 0;
+			wheels[i]->runPWM(0, wheels[i]->getDesiredDir(), false);
+		}
+	}
+}
+
+static int clampRot(int v) {
+	int m = (int)(MAX_SPEED_MMPS / ROT_FACTOR);
+	return v > m ? m : v;
+}
+
 static bool needsSpeed(const char* c) {
 	return !strcmp(c, "ADV") || !strcmp(c, "BACK") || !strcmp(c, "LEFT") ||
 	       !strcmp(c, "RIGHT") || !strcmp(c, "ROTL") || !strcmp(c, "ROTR");
@@ -91,21 +145,23 @@ static void handleLine(char* s) {
 		reply(F("OK"));
 		return;
 	}
-	if (!strcmp(cmd, "STOP")) { Omni.setCarStop(); moving = false; }
+	if (!strcmp(cmd, "STOP")) { stopWheels(); }
 	else if (!strcmp(cmd, "MOVE")) {
 		if (!a1 || !a2) { reply(F("ERR args")); return; }
 		float rad = atof(a2) * PI / 180.0;
 		float omega = a3 ? atof(a3) : 0;
-		Omni.setCarMove(speed, rad, omega);
+		float k = limitScale(speed, rad, omega);
+		startWheels();
+		Omni.setCarMove(speed * k, rad, omega * k);
 		moving = true;
 	}
 	else if (needsSpeed(cmd) && !a1) { reply(F("ERR args")); return; }
-	else if (!strcmp(cmd, "ADV"))   { Omni.setCarAdvance(speed);     moving = true; }
-	else if (!strcmp(cmd, "BACK"))  { Omni.setCarBackoff(speed);     moving = true; }
-	else if (!strcmp(cmd, "LEFT"))  { Omni.setCarLeft(speed);        moving = true; }
-	else if (!strcmp(cmd, "RIGHT")) { Omni.setCarRight(speed);       moving = true; }
-	else if (!strcmp(cmd, "ROTL"))  { Omni.setCarRotateLeft(speed);  moving = true; }
-	else if (!strcmp(cmd, "ROTR"))  { Omni.setCarRotateRight(speed); moving = true; }
+	else if (!strcmp(cmd, "ADV"))   { startWheels(); Omni.setCarAdvance(speed);     moving = true; }
+	else if (!strcmp(cmd, "BACK"))  { startWheels(); Omni.setCarBackoff(speed);     moving = true; }
+	else if (!strcmp(cmd, "LEFT"))  { startWheels(); Omni.setCarLeft(speed);        moving = true; }
+	else if (!strcmp(cmd, "RIGHT")) { startWheels(); Omni.setCarRight(speed);       moving = true; }
+	else if (!strcmp(cmd, "ROTL"))  { startWheels(); Omni.setCarRotateLeft(clampRot(speed));  moving = true; }
+	else if (!strcmp(cmd, "ROTR"))  { startWheels(); Omni.setCarRotateRight(clampRot(speed)); moving = true; }
 	else { reply(F("ERR cmd")); return; }
 	reply(F("OK"));
 }
@@ -156,8 +212,7 @@ void loop() {
 #endif
 	readSerial();
 	if (moving && millis() - lastCmdMs > FAILSAFE_MS) {
-		Omni.setCarStop();
-		moving = false;
+		stopWheels();
 	}
-	Omni.PIDRegulate();
+	regulate();
 }

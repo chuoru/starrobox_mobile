@@ -54,5 +54,5 @@ disconnect the M5 side. The board resets when the port opens, so the tool waits 
 | `PING` | reply `PONG` |
 | `TURN <ms>` | RS485 reply pause, 0-200 ms (default 30) |
 
-Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-600. The robot stops by itself if no command
+Replies are `OK` or `ERR <reason>`. Speed is clamped to 0-120 (see the speed limit in design/wheel-pid-tuning.md). The robot stops by itself if no command
 arrives for 1 s, so resend commands to keep moving. Topics: `starrobox/robot/cmd`, `starrobox/robot/status`.
