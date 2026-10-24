@@ -28,8 +28,9 @@ Wiring debug: `pio run -e mqtt-debug` also publishes every raw byte received fro
 `starrobox/robot/status/rx`, `pio run -e ble-debug` logs BLE writes, bus bytes and notifications on the M5's USB serial port, and `nexus/rs485_probe` is a small Nexus sketch that sends `HELLO` once a second.
 
 ## Phone (BLE mode)
-Host `phone/index.html` over HTTPS (Web Bluetooth needs it), open it in Chrome on Android (Bluefy on iOS),
-tap Connect and choose `StarroBox`. Generic BLE terminal apps also work (Nordic UART Service). See `design/ble-phone-control.md`.
+The page is published with GitHub Pages at https://chuoru.github.io/starrobox_mobile/phone/ (Web Bluetooth needs HTTPS).
+Open it in Chrome on Android, or in the free Bluefy browser on iPhone (Safari has no Web Bluetooth),
+tap Connect and choose `Starrobox`. Generic BLE terminal apps also work (Nordic UART Service). See `design/ble-phone-control.md`.
 
 ## PC
 Run a broker (`mosquitto`), `pip install paho-mqtt`, then use `server/robot_ctl.py`.

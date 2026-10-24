@@ -35,7 +35,7 @@ Nordic UART Service, so generic BLE terminal apps (nRF Toolbox, Serial Bluetooth
 
 ## Usage
 1. `cd m5/starrobox_m5_bridge`, copy `src/config.example.h` to `src/config.h`, then `pio run -e ble -t upload`.
-2. Host `phone/index.html` over HTTPS (Web Bluetooth does not work from `file://` or plain http, except on localhost), for example GitHub Pages. Open it in Chrome on Android, or in a Web Bluetooth browser such as Bluefy on iOS.
+2. The page is published at https://chuoru.github.io/starrobox_mobile/phone/ (GitHub Pages, branch `main`). Any HTTPS host works: host `phone/index.html` over HTTPS (Web Bluetooth does not work from `file://` or plain http, except on localhost), for example GitHub Pages. Open it in Chrome on Android, or in a Web Bluetooth browser such as Bluefy on iOS.
 3. Tap Connect, pick `StarroBox`, and drive with the joystick.
 
 Joystick angles follow the Nexus library: counter-clockwise from right, so 0 = right, 90 = forward, 180 = left, 270 = backward (from `setCarRight` / `setCarBackoff` in `Omni4WD.cpp`).
