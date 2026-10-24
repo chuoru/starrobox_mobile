@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>StarroBox Remote</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#111; --pad:#e4e4e4; --knob:#2a6df4; --btn:#d8d8d8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --pad:#2a2a2a; --btn:#333; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px system-ui, sans-serif;
+         display:flex; flex-direction:column; align-items:center; gap:16px; padding:16px; touch-action:none;
+         user-select:none; -webkit-user-select:none; }
+  button { font:inherit; padding:12px 18px; border:0; border-radius:10px; background:var(--btn); color:var(--fg); }
+  #stop { background:#d33; color:#fff; font-weight:bold; width:100%; max-width:320px; padding:16px; }
+  #pad { width:240px; height:240px; border-radius:50%; background:var(--pad); position:relative; }
+  #knob { width:80px; height:80px; border-radius:50%; background:var(--knob); position:absolute; left:80px; top:80px; }
+  .row { display:flex; gap:12px; align-items:center; }
+  #log { font:13px monospace; min-height:1.4em; opacity:.8; }
+</style>
+</head>
+<body>
+  <div class="row"><button id="connect">Connect</button><span id="state">Disconnected</span></div>
+  <div id="pad"><div id="knob"></div></div>
+  <div class="row">
+    <button id="rotl">&#8634; Rotate L</button>
+    <button id="rotr">Rotate R &#8635;</button>
+  </div>
+  <label>Speed <input id="speed" type="range" min="50" max="400" step="25" value="150"> <span id="speedv">150</span></label>
+  <button id="stop">STOP</button>
+  <div id="log"></div>
+<script>
+// Nordic UART Service, served by the M5 in BLE mode.
+const NUS = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const RESEND_MS = 150;   // the Nexus stops after 1 s without a command
+
+let rx = null, cmd = null, busy = false;
+const $ = id => document.getElementById(id);
+
+async function send(line) {
+  if (!rx || busy) return;
+  busy = true;
+  try { await rx.writeValueWithoutResponse(new TextEncoder().encode(line + '\n')); }
+  catch (e) { $('log').textContent = String(e); }
+  busy = false;
+}
+
+$('connect').onclick = async () => {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [NUS] }] });
+    dev.addEventListener('gattserverdisconnected', () => { rx = null; $('state').textContent = 'Disconnected'; });
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(NUS);
+    rx = await svc.getCharacteristic(NUS_RX);
+    const tx = await svc.getCharacteristic(NUS_TX);
+    await tx.startNotifications();
+    tx.addEventListener('characteristicvaluechanged', e => {
+      const t = new TextDecoder().decode(e.target.value).trim();
+      if (t && t !== 'OK') $('log').textContent = t;
+    });
+    $('state').textContent = 'Connected: ' + dev.name;
+  } catch (e) { $('log').textContent = String(e); }
+};
+
+// Resend the active command while a control is held, STOP once on release.
+setInterval(() => { if (cmd) send(cmd()); }, RESEND_MS);
+function hold(fn) { cmd = fn; send(fn()); }
+function release() { cmd = null; send('STOP'); }
+
+const speed = () => +$('speed').value;
+$('speed').oninput = () => $('speedv').textContent = $('speed').value;
+$('stop').onclick = release;
+for (const [id, name] of [['rotl', 'ROTL'], ['rotr', 'ROTR']]) {
+  const b = $(id);
+  b.addEventListener('pointerdown', () => hold(() => `${name} ${speed()}`));
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, release);
+}
+
+// Joystick: Nexus angle is counter-clockwise from "right", so 90 = forward, 270 = backward.
+const pad = $('pad'), knob = $('knob'), R = 120, K = 40;
+let dx = 0, dy = 0;
+function move(ev) {
+  const r = pad.getBoundingClientRect();
+  let x = ev.clientX - (r.left + R), y = ev.clientY - (r.top + R);
+  const d = Math.hypot(x, y), max = R - K;
+  if (d > max) { x *= max / d; y *= max / d; }
+  dx = x / max; dy = -y / max;   // dy positive = up
+  knob.style.left = (R - K + x) + 'px'; knob.style.top = (R - K + y) + 'px';
+}
+pad.addEventListener('pointerdown', ev => {
+  pad.setPointerCapture(ev.pointerId); move(ev);
+  hold(() => {
+    const m = Math.min(1, Math.hypot(dx, dy));
+    if (m < 0.15) return 'STOP';   // dead zone
+    const ang = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+    return `MOVE ${Math.round(speed() * m)} ${Math.round(ang)} 0`;
+  });
+});
+pad.addEventListener('pointermove', ev => { if (ev.buttons) move(ev); });
+const end = () => { knob.style.left = knob.style.top = (R - K) + 'px'; dx = dy = 0; release(); };
+pad.addEventListener('pointerup', end);
+pad.addEventListener('pointercancel', end);
+</script>
+</body>
+</html>

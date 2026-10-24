@@ -1,0 +1,3 @@
+config.h
+.pio/
+__pycache__/
