@@ -1,8 +1,8 @@
-// M5 bridge between a wireless link and the Nexus UART. One mode per build:
+// M5 bridge between a wireless link and the Nexus board (over RS485). One mode per build:
 //   MODE_MQTT: commands arrive over WiFi/MQTT from the PC
 //   MODE_BLE:  commands arrive over BLE (Nordic UART Service) from a phone
 // Replies from the Nexus go back over the same link.
-#include <M5Stack.h>
+#include <M5Unified.h>
 #include "config.h"
 
 #if defined(MODE_MQTT) == defined(MODE_BLE)
@@ -23,24 +23,40 @@
 
 static String rxLine;
 
+// Atomic RS485 Base on the AtomS3: RX = G5, TX = G6 (same as the reference project).
+static HardwareSerial nexusUart(1);
+
+// AtomS3 display is 128x128; status on the first line, last command on the third.
 static void show(const char* msg) {
-	M5.Lcd.fillRect(0, 0, 320, 40, BLACK);
-	M5.Lcd.setCursor(4, 4);
-	M5.Lcd.print(msg);
+	M5.Display.fillRect(0, 0, 128, 16, BLACK);
+	M5.Display.setCursor(2, 2);
+	M5.Display.print(msg);
 }
 
 static void showCmd(const String& cmd) {
-	M5.Lcd.fillRect(0, 60, 320, 40, BLACK);
-	M5.Lcd.setCursor(4, 60);
-	M5.Lcd.print(cmd);
+	M5.Display.fillRect(0, 40, 128, 16, BLACK);
+	M5.Display.setCursor(2, 40);
+	M5.Display.print(cmd);
 }
+
+// The Nexus is on a half-duplex RS485 bus (nexusUart -> Atomic RS485 Base, auto-direction).
+// Keep writes apart so a command does not collide with a Nexus reply on the bus.
+#define BUS_GAP_MS 10
+static unsigned long lastBusMs = 0;
 
 // Send one command line to the Nexus.
 static void toNexus(const char* s, size_t len) {
 	if (len == 0 || len > MAX_CMD) return;
-	Serial2.write((const uint8_t*)s, len);
-	Serial2.write('\n');
+	while (millis() - lastBusMs < BUS_GAP_MS) delay(1);
+	nexusUart.write((const uint8_t*)s, len);
+	nexusUart.write('\n');
+	lastBusMs = millis();
 	showCmd(String(s).substring(0, len));
+}
+
+// The RS485 unit hears its own transmissions, so only Nexus replies are forwarded.
+static bool isNexusReply(const String& l) {
+	return l == "PONG" || l == "OK" || l.startsWith("ERR");
 }
 
 #ifdef MODE_MQTT
@@ -106,7 +122,7 @@ class ServerCb : public BLEServerCallbacks {
 	void onConnect(BLEServer*) override { connected = true; }
 	void onDisconnect(BLEServer*) override {
 		connected = false;
-		Serial2.write("STOP\n");          // never leave the robot running without a phone
+		toNexus("STOP", 4);               // never leave the robot running without a phone
 		BLEDevice::startAdvertising();
 	}
 };
@@ -169,20 +185,82 @@ static void toLink(const String& reply) {
 #endif
 
 void setup() {
-	M5.begin();
-	M5.Lcd.setTextSize(2);
-	Serial2.begin(NEXUS_BAUD, SERIAL_8N1, NEXUS_RX, NEXUS_TX);
+	auto cfg = M5.config();
+	M5.begin(cfg);
+	M5.Display.setTextSize(1);
+#if defined(DEBUG_BUS) && defined(MODE_MQTT)
+	// Pin probe: send PING in each RX/TX order and look for PONG from the Nexus.
+	// Results are shown on the display; the order that answers (else the first) is used.
+	int pins[2][2] = {{NEXUS_RX, NEXUS_TX}, {NEXUS_TX, NEXUS_RX}};
+	int use = 0;
+	bool found = false;
+	for (int i = 0; i < 2; i++) {
+		nexusUart.begin(NEXUS_BAUD, SERIAL_8N1, pins[i][0], pins[i][1]);
+		delay(50);
+		while (nexusUart.available()) nexusUart.read();
+		String got;
+		for (int tries = 0; tries < 3 && got.indexOf("PONG") < 0; tries++) {
+			nexusUart.write("PING\n");
+			nexusUart.flush();
+			unsigned long t = millis();
+			while (millis() - t < 300) {
+				while (nexusUart.available()) got += (char)nexusUart.read();
+			}
+		}
+		bool ok = got.indexOf("PONG") >= 0;
+		M5.Display.setCursor(2, 90 + i * 12);
+		M5.Display.printf("RX%d TX%d %s b%d", pins[i][0], pins[i][1], ok ? "PONG" : "none", (int)got.length());
+		if (ok && !found) { use = i; found = true; }
+		nexusUart.end();
+	}
+	nexusUart.begin(NEXUS_BAUD, SERIAL_8N1, pins[use][0], pins[use][1]);
+#else
+	nexusUart.begin(NEXUS_BAUD, SERIAL_8N1, NEXUS_RX, NEXUS_TX);
+#endif
 	linkSetup();
 }
 
+#if defined(DEBUG_BUS) && defined(MODE_MQTT)
+// Debug build: publish every raw byte received from the RS485 bus, as hex, to <status>/rx.
+static String dbgHex;
+static unsigned long dbgLastMs = 0;
+static unsigned long rxTotal = 0;
+static void debugBus(uint8_t b) {
+	char h[4];
+	snprintf(h, sizeof h, "%02X ", b);
+	dbgHex += h;
+	rxTotal++;
+}
+static void debugFlush() {
+	static unsigned long lastPing = 0;
+	if (millis() - lastPing > 2000) {   // keep the bus busy so the Nexus probe can count bytes
+		lastPing = millis();
+		nexusUart.write("PING\n");
+	}
+	if (dbgHex.length() && millis() - dbgLastMs > 200 && mqtt.connected()) {
+		mqtt.publish(TOPIC_STATUS "/rx", dbgHex.c_str());
+		dbgHex = "";
+		dbgLastMs = millis();
+		M5.Display.fillRect(0, 70, 128, 16, BLACK);
+		M5.Display.setCursor(2, 70);
+		M5.Display.printf("rx bytes %lu", rxTotal);
+	}
+}
+#else
+#define debugBus(b)
+#define debugFlush()
+#endif
+
 void loop() {
 	linkLoop();
+	debugFlush();
 
-	while (Serial2.available()) {
-		char c = Serial2.read();
+	while (nexusUart.available()) {
+		char c = nexusUart.read();
+		debugBus((uint8_t)c);
 		if (c == '\r') continue;
 		if (c == '\n') {
-			if (rxLine.length()) toLink(rxLine);
+			if (isNexusReply(rxLine)) toLink(rxLine);
 			rxLine = "";
 		} else if (rxLine.length() < 64) {
 			rxLine += c;

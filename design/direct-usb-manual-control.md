@@ -19,8 +19,8 @@ python server/robot_ctl.py direct COM5 [--baud 19200] [--speed 150]
 Keys: `w`/`a`/`s`/`d` move, `q`/`e` rotate, space stops, `+`/`-` change speed, Esc quits. The command is resent every 0.2 s while a key is held and `STOP` is sent shortly after release and on exit. Replies other than `OK` are printed.
 
 ## Constraints
-- The USB link and the M5 share the Nexus UART (D0/D1). Disconnect the M5 wires before using this mode.
-- Keep the wireless (APC220) and RS485 jumpers removed.
+- The USB link and the shield's RS485 (used by the M5) share the Nexus UART. Remove the RS485 jumper before using this mode, and disconnect the M5 side.
+- Keep the wireless (APC220) jumper removed too.
 - The board resets when the port opens, so the tool waits 2 s before sending.
 - Windows console only (uses `msvcrt`).
 - The Nexus 1 s failsafe stops the robot if the cable drops or the tool dies.

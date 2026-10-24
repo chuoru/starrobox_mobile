@@ -41,10 +41,10 @@ Nordic UART Service, so generic BLE terminal apps (nRF Toolbox, Serial Bluetooth
 Joystick angles follow the Nexus library: counter-clockwise from right, so 0 = right, 90 = forward, 180 = left, 270 = backward (from `setCarRight` / `setCarBackoff` in `Omni4WD.cpp`).
 
 ## Status
-Written, not compiled or run: no PlatformIO or Arduino toolchain, phone or hardware was available in the session.
+The `ble` env compiles for the AtomS3 (M5Unified, `espressif32@6.4.0`). Not yet tested with a phone.
 
 ## Open items
-- Library versions are pinned to `espressif32@6.9.0` (Arduino-ESP32 2.x); the BLE API differs in 3.x.
+- The platform is pinned to `espressif32@6.4.0` (Arduino-ESP32 2.x); the BLE API differs in 3.x.
 - Default BLE MTU is 20 bytes, enough for the longest command (`MOVE 600 359 100`).
 - No pairing PIN: anyone within range can connect. Add bonding if that matters.
 

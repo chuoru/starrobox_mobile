@@ -1,10 +1,11 @@
 // Copy to config.h (git-ignored) and fill in.
 #pragma once
 
-// Nexus UART (both modes)
+// Nexus link over RS485 (both modes): AtomS3 + Atomic RS485 Base (auto-direction),
+// A/B wired to the A/B terminals of the Nexus IO Expansion Shield.
 #define NEXUS_BAUD  19200
-#define NEXUS_RX    16   // M5 RX <- Nexus D1 (level shift 5V -> 3.3V)
-#define NEXUS_TX    17   // M5 TX -> Nexus D0
+#define NEXUS_RX    5    // AtomS3 RX <- RS485 base
+#define NEXUS_TX    6    // AtomS3 TX -> RS485 base
 
 // MQTT mode only
 #define WIFI_SSID   "your-ssid"
@@ -16,4 +17,4 @@
 #define TOPIC_STATUS "starrobox/robot/status"
 
 // BLE mode only
-#define BLE_NAME    "StarroBox"
+#define BLE_NAME    "Starrobox"

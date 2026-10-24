@@ -3,21 +3,29 @@
 PC --MQTT--> M5 (bridge) --UART 19200 8N1--> Nexus 4WD omni robot.
 
 ## Wiring
-M5 TX (GPIO17) -> Nexus D0 (RX); Nexus D1 (TX) -> M5 RX (GPIO16) **through a 5V -> 3.3V level shifter or divider**; common GND.
-Remove the APC220 wireless and RS485 jumpers on the Nexus (they share the UART). USB serial is
-unusable for debugging while the M5 is attached.
+The M5 talks to the Nexus over RS485, not directly over TTL serial:
+- M5 side: M5 AtomS3 on an Atomic RS485 Base (auto-direction), using RX G5 and TX G6. A/B polarity matters: if nothing answers, swap A and B.
+- Nexus side: the IO Expansion Shield (22006). Its RS485 connector shares the hardware UART and pin 13 sets the direction.
+- Connect A to A and B to B between the unit and the shield, plus common GND.
+- Jumpers on the shield: **fit** the RS485 jumper when running with the M5; **remove** it (and the wireless jumper) to
+  upload a sketch or use the USB cable. USB and RS485 cannot be used at the same time.
 
 ## Nexus
 Copy `design/nexus/lib/{MotorWheel,PID_Beta6,PinChangeInt}` (plus the stock EEPROM) into the Arduino
 libraries folder. Open `nexus/starrobox_nexus/starrobox_nexus.ino`, choose board "Arduino Duemilanove or
-Diecimila (ATmega328)" and upload with the jumpers removed. Test with a serial terminal at 19200.
+Diecimila (ATmega328)" and upload with the RS485 and wireless jumpers removed. Test with a serial terminal at 19200,
+then fit the RS485 jumper to run from the M5.
 
 ## M5
 `cd m5/starrobox_m5_bridge`, copy `src/config.example.h` to `src/config.h`, edit, then pick one mode:
 - `pio run -e mqtt -t upload` for PC -> MQTT -> M5 -> Nexus
 - `pio run -e ble -t upload` for phone -> BLE -> M5 -> Nexus
 
-The modes are separate; reflash to switch. The default board is M5Stack Core; change `platformio.ini` for other models.
+The modes are separate; reflash to switch. The board is the M5 AtomS3 (settings follow `design/m5/M5Atom`). Pass
+`--upload-port COMxx` to pick the serial port.
+
+Wiring debug: `pio run -e mqtt-debug` also publishes every raw byte received from the RS485 bus to
+`starrobox/robot/status/rx`, and `nexus/rs485_probe` is a small Nexus sketch that sends `HELLO` once a second.
 
 ## Phone (BLE mode)
 Host `phone/index.html` over HTTPS (Web Bluetooth needs it), open it in Chrome on Android (Bluefy on iOS),
@@ -32,8 +40,8 @@ a key, and on exit.
 
 Direct control, PC to robot over USB (no M5, no MQTT): `pip install pyserial`, then
 `python server/robot_ctl.py direct COM5` (use the COM port of the Nexus USB link; same keys as above).
-The M5 shares the Nexus UART, so disconnect its wires from D0/D1 first, and keep the wireless/RS485
-jumpers removed. The board resets when the port opens, so the tool waits 2 s before sending.
+The USB link and RS485 share the Nexus UART, so remove the shield's RS485 jumper (and the wireless jumper) first and
+disconnect the M5 side. The board resets when the port opens, so the tool waits 2 s before sending.
 
 ## Protocol (one line per command, `\n` terminated; same text over MQTT and serial)
 | Command | Effect |

@@ -1,3 +1,5 @@
 config.h
 .pio/
 __pycache__/
+design/nexus/*
+design/m5/*

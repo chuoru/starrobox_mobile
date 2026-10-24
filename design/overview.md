@@ -9,7 +9,7 @@ The Nexus 4WD omni robot runs one firmware (`nexus/starrobox_nexus/starrobox_nex
 | Direct (USB) | PC -> USB serial -> Nexus | [direct-usb-manual-control.md](direct-usb-manual-control.md) | `robot_ctl.py direct COM5` |
 
 ## Switching modes
-All modes use the Nexus UART on D0/D1, so only one link can be connected at a time.
+All modes use the Nexus hardware UART, so only one link can be active at a time: the shield's RS485 port for the M5 modes, or the USB cable for Direct. The RS485 jumper on the shield selects which one is wired to the UART.
 
 **M5 modes: Remote (MQTT) <-> Phone (BLE)**
 The wiring is the same; the M5 firmware differs and is chosen at build time.
@@ -20,15 +20,15 @@ Only one runs on the M5 at a time (WiFi and BLE together are heavy on an ESP32).
 
 **Remote -> Direct**
 1. Stop any running `robot_ctl.py` session.
-2. Unplug the M5 wires from D0/D1.
+2. Remove the RS485 jumper on the shield (and the wireless jumper) and disconnect the M5 side.
 3. Connect USB and run `robot_ctl.py direct <COM>`.
 
 **Direct -> Remote**
 1. Quit the `direct` session (Esc) and unplug USB from the PC, or at least close the port.
-2. Reconnect the M5 wires (M5 TX -> D0, D1 -> M5 RX through a level shifter, common GND).
+2. Fit the RS485 jumper and reconnect the M5's RS485 unit (A to A, B to B, common GND).
 3. Start the broker and run `robot_ctl.py manual` or `send`.
 
-In both modes the wireless (APC220) and RS485 jumpers stay removed, and the Nexus stops by itself after 1 s without a command.
+The wireless (APC220) jumper stays removed in all modes. Uploading a sketch needs the RS485 jumper removed as well. The Nexus stops by itself after 1 s without a command.
 
 ## Shared
 - Protocol and failsafe: see the protocol section of [mqtt-serial-robot-control.md](mqtt-serial-robot-control.md).
